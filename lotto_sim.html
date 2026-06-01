@@ -302,6 +302,9 @@
         <input type="number" id="hTo" placeholder="끝 회차 (비우면 최신)" min="1" />
         <button class="btn-ghost" id="hLatestBtn">최근 50회</button>
         <button class="btn-primary" id="hFetchBtn">📥 불러오기</button>
+        <button class="btn-ghost" id="hExportBtn">💾 내보내기</button>
+        <button class="btn-ghost" id="hImportBtn">📂 가져오기</button>
+        <input type="file" id="hImportInput" accept="application/json,.json" style="display:none" />
         <button class="btn-ghost" id="hClearBtn">🗑 캐시 삭제</button>
       </div>
       <div class="hint" id="hStatus">캐시된 이력이 없습니다. 회차 범위를 지정하거나 "최근 50회"를 눌러 시작하세요.</div>
@@ -363,7 +366,7 @@
       </div>
     </section>
 
-    <footer>※ 본 시뮬레이션은 통계적 확률(약 1/8,145,060)을 체험하기 위한 도구입니다. <span style="opacity:.5">build 2026-06-01-v3</span></footer>
+    <footer>※ 본 시뮬레이션은 통계적 확률(약 1/8,145,060)을 체험하기 위한 도구입니다. <span style="opacity:.5">build 2026-06-01-v4</span></footer>
   </div>
 
 <script>
@@ -910,6 +913,71 @@
     renderHistoryUI();
     setStatus('캐시를 삭제했습니다.');
   });
+
+  $('#hExportBtn').addEventListener('click', () => {
+    if (!history.length) { setStatus('내보낼 이력이 없습니다.', 'err'); return; }
+    const blob = new Blob([JSON.stringify(history, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const first = history[0].drwNo, last = history[history.length - 1].drwNo;
+    a.download = `lotto_history_${first}-${last}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus(`${history.length}회를 파일로 저장했습니다.`, 'ok');
+  });
+
+  $('#hImportBtn').addEventListener('click', () => $('#hImportInput').click());
+  $('#hImportInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const rows = Array.isArray(parsed) ? parsed : [parsed];
+      const valid = [];
+      for (const r of rows) {
+        const norm = normalizeRow(r);
+        if (norm) valid.push(norm);
+      }
+      if (!valid.length) { setStatus('유효한 회차 데이터를 찾지 못했습니다.', 'err'); return; }
+      mergeHistory(valid);
+      setStatus(`✓ ${valid.length}회 가져오기 완료 (전체 캐시 ${history.length}회)`, 'ok');
+      renderHistoryUI();
+    } catch (err) {
+      setStatus(`가져오기 실패: ${err.message}`, 'err');
+    } finally {
+      e.target.value = '';
+    }
+  });
+
+  /* 우리 포맷 또는 dhlottery 원본 포맷을 모두 수용 */
+  function normalizeRow(r) {
+    if (!r || typeof r !== 'object') return null;
+    if (Array.isArray(r.numbers) && r.numbers.length === 6 && typeof r.drwNo === 'number') {
+      return {
+        drwNo: r.drwNo,
+        date: r.date || '',
+        numbers: r.numbers.slice().sort((a,b)=>a-b),
+        bonus: r.bonus,
+        firstPrize: r.firstPrize || 0,
+        firstWinners: r.firstWinners || 0,
+        totalSales: r.totalSales || 0
+      };
+    }
+    if (typeof r.drwtNo1 === 'number') {
+      return {
+        drwNo: r.drwNo,
+        date: r.drwNoDate || '',
+        numbers: [r.drwtNo1, r.drwtNo2, r.drwtNo3, r.drwtNo4, r.drwtNo5, r.drwtNo6].sort((a,b)=>a-b),
+        bonus: r.bnusNo,
+        firstPrize: r.firstWinamnt || 0,
+        firstWinners: r.firstPrzwnerCo || 0,
+        totalSales: r.totSellamnt || 0
+      };
+    }
+    return null;
+  }
 
   let busy = false;
   $('#hFetchBtn').addEventListener('click', async () => {
