@@ -264,6 +264,28 @@
   .match-cell .mv { font-size: 18px; font-weight: 800; margin-top: 4px; }
   .match-cell.hit { border-color: #15803d; background: #052e16; }
   .match-cell.hit .mv { color: #4ade80; }
+
+  .rank-table {
+    width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px;
+    border: 1px solid #1f2a44; border-radius: 12px; overflow: hidden;
+  }
+  .rank-table th, .rank-table td {
+    padding: 11px 12px; text-align: center;
+    border-bottom: 1px solid #1f2a44;
+    font-variant-numeric: tabular-nums;
+  }
+  .rank-table tr:last-child td { border-bottom: none; }
+  .rank-table th {
+    background: #0b1224; color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: .3px;
+    font-weight: 600;
+  }
+  .rank-table td.rank-name { font-weight: 700; text-align: left; }
+  .rank-table td.amt { text-align: right; color: #cbd5e1; }
+  .rank-table tr.r1 { background: linear-gradient(90deg, #052e16, transparent); }
+  .rank-table tr.r1 td { color: #4ade80; font-weight: 700; }
+  .rank-table tr.r2 td.amt, .rank-table tr.r3 td.amt { color: var(--accent-2); }
+  .rank-table tr.miss td { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -272,6 +294,27 @@
       <h1>🎱 로또 1등 당첨 확률 시뮬레이터</h1>
       <p>1~45 사이 숫자 6개를 입력하고 1등이 나올 때까지 가상 추첨을 돌려보세요.</p>
     </header>
+
+    <section class="card">
+      <div class="label">📊 실제 당첨 이력 (동행복권 공식)</div>
+      <div class="history-controls">
+        <input type="number" id="hFrom" placeholder="시작 회차" min="1" />
+        <input type="number" id="hTo" placeholder="끝 회차 (비우면 최신)" min="1" />
+        <button class="btn-ghost" id="hLatestBtn">최근 50회</button>
+        <button class="btn-primary" id="hFetchBtn">📥 불러오기</button>
+        <button class="btn-ghost" id="hClearBtn">🗑 캐시 삭제</button>
+      </div>
+      <div class="hint" id="hStatus">캐시된 이력이 없습니다. 회차 범위를 지정하거나 "최근 50회"를 눌러 시작하세요.</div>
+      <div class="live" id="hSummary" style="display:none"></div>
+      <details id="hDetails" style="margin-top:14px; display:none">
+        <summary>회차별 상세 보기 (당첨번호 · 1등 상금)</summary>
+        <div class="history-table" id="hTable"></div>
+      </details>
+      <div id="hCompare" style="display:none">
+        <div class="label" style="margin-top:22px;">🎯 내 번호 vs 실제 당첨 이력</div>
+        <div id="hCompareContent"></div>
+      </div>
+    </section>
 
     <section class="card">
       <div class="label">내 번호 입력 (1~45)</div>
@@ -304,27 +347,6 @@
       <div class="draw" id="draw"></div>
     </section>
 
-    <section class="card">
-      <div class="label">📊 실제 당첨 이력 (동행복권 공식)</div>
-      <div class="history-controls">
-        <input type="number" id="hFrom" placeholder="시작 회차" min="1" />
-        <input type="number" id="hTo" placeholder="끝 회차 (비우면 최신)" min="1" />
-        <button class="btn-ghost" id="hLatestBtn">최근 50회</button>
-        <button class="btn-primary" id="hFetchBtn">📥 불러오기</button>
-        <button class="btn-ghost" id="hClearBtn">🗑 캐시 삭제</button>
-      </div>
-      <div class="hint" id="hStatus">캐시된 이력이 없습니다. 회차 범위를 지정하거나 "최근 50회"를 눌러 시작하세요.</div>
-      <div class="live" id="hSummary" style="display:none"></div>
-      <details id="hDetails" style="margin-top:14px; display:none">
-        <summary>회차별 상세 보기 (당첨번호 · 1등 상금)</summary>
-        <div class="history-table" id="hTable"></div>
-      </details>
-      <div id="hCompare" style="display:none">
-        <div class="label" style="margin-top:22px;">🎯 내 번호 vs 실제 당첨 이력</div>
-        <div id="hCompareContent"></div>
-      </div>
-    </section>
-
     <section class="card result-card" id="resultCard">
       <h2>🎉 1등 당첨!</h2>
       <div class="sub" id="resultSub"></div>
@@ -332,6 +354,12 @@
         <div class="stat"><div class="k">총 시도 회차</div><div class="v accent" id="rTries">-</div></div>
         <div class="stat"><div class="k">지출 금액</div><div class="v success" id="rSpent">-</div></div>
         <div class="stat"><div class="k">매주 5게임 기준 예상 연수</div><div class="v accent" id="rYears">-</div></div>
+      </div>
+      <div class="label" style="margin-top:22px;">📜 부수 당첨 내역 (역대 평균 상금 기준)</div>
+      <div id="rRanks"></div>
+      <div class="live" style="margin-top:14px">
+        <div class="stat"><div class="k">예상 누적 당첨금</div><div class="v success" id="rWinnings">-</div></div>
+        <div class="stat"><div class="k">순이익 (당첨금 − 지출)</div><div class="v accent" id="rNet">-</div></div>
       </div>
     </section>
 
@@ -415,7 +443,7 @@
     return won.toLocaleString() + ' 원';
   };
   const fmtNum = (n) => n.toLocaleString();
-  const renderDraw = (arr) => {
+  const renderDraw = (arr, bonus) => {
     drawEl.innerHTML = '';
     arr.forEach(n => {
       const d = document.createElement('div');
@@ -423,29 +451,48 @@
       d.textContent = n;
       drawEl.appendChild(d);
     });
+    if (bonus) {
+      const sep = document.createElement('div');
+      sep.textContent = '+';
+      sep.style.cssText = 'display:flex;align-items:center;font-size:22px;color:var(--muted);font-weight:700;';
+      drawEl.appendChild(sep);
+      const b = document.createElement('div');
+      b.className = 'b ' + colorClass(bonus);
+      b.textContent = bonus;
+      b.title = '보너스 번호';
+      drawEl.appendChild(b);
+    }
   };
 
   /* ===== Web Worker (Blob inline) ===== */
   const workerSrc = `
     let running = false;
-    let target = [];
     let targetMask = 0n;
     let tries = 0;
     let lastReport = 0;
-    const REPORT_EVERY = 50000;
+    let ranks = new Uint32Array(6); // 1..5 등 사용
+    const REPORT_EVERY = 100000;
 
-    function pickSixMask() {
+    function pickDraw() {
       let mask = 0n;
       let count = 0;
       while (count < 6) {
         const n = (Math.random() * 45) | 0;
         const bit = 1n << BigInt(n);
-        if ((mask & bit) === 0n) {
-          mask |= bit;
-          count++;
-        }
+        if ((mask & bit) === 0n) { mask |= bit; count++; }
       }
-      return mask;
+      let bonus;
+      while (true) {
+        bonus = (Math.random() * 45) | 0;
+        if ((mask & (1n << BigInt(bonus))) === 0n) break;
+      }
+      return [mask, bonus];
+    }
+
+    function popcount(x) {
+      let c = 0;
+      while (x) { c++; x &= x - 1n; }
+      return c;
     }
 
     function maskToArr(mask) {
@@ -461,15 +508,26 @@
       const batch = 200000;
       for (let i = 0; i < batch; i++) {
         tries++;
-        const m = pickSixMask();
-        if (m === targetMask) {
-          postMessage({ type: 'win', tries, draw: maskToArr(m) });
+        const [m, bonus] = pickDraw();
+        const matches = popcount(m & targetMask);
+
+        if (matches === 6) {
+          ranks[1]++;
+          postMessage({ type: 'win', tries, draw: maskToArr(m), bonus: bonus + 1, ranks: Array.from(ranks) });
           running = false;
           return;
+        } else if (matches === 5) {
+          if ((targetMask >> BigInt(bonus)) & 1n) ranks[2]++;
+          else ranks[3]++;
+        } else if (matches === 4) {
+          ranks[4]++;
+        } else if (matches === 3) {
+          ranks[5]++;
         }
+
         if (tries - lastReport >= REPORT_EVERY) {
           lastReport = tries;
-          postMessage({ type: 'progress', tries, draw: maskToArr(m) });
+          postMessage({ type: 'progress', tries, draw: maskToArr(m), bonus: bonus + 1, ranks: Array.from(ranks) });
         }
       }
       setTimeout(loop, 0);
@@ -478,16 +536,16 @@
     onmessage = (e) => {
       const { cmd, payload } = e.data;
       if (cmd === 'start') {
-        target = payload.numbers;
         targetMask = 0n;
-        for (const n of target) targetMask |= 1n << BigInt(n - 1);
+        for (const n of payload.numbers) targetMask |= 1n << BigInt(n - 1);
         tries = 0;
         lastReport = 0;
+        ranks = new Uint32Array(6);
         running = true;
         loop();
       } else if (cmd === 'stop') {
         running = false;
-        postMessage({ type: 'stopped', tries });
+        postMessage({ type: 'stopped', tries, ranks: Array.from(ranks) });
       }
     };
   `;
@@ -505,7 +563,7 @@
     inputs.forEach(i => i.disabled = isRunning);
   };
 
-  const updateLive = (tries, draw) => {
+  const updateLive = (tries, draw, bonus) => {
     roundEl.textContent = fmtNum(tries);
     spentEl.textContent = fmtKRW(tries * 1000);
     const now = performance.now();
@@ -521,13 +579,86 @@
     const m = Math.floor((sec % 3600) / 60);
     const s = sec % 60;
     elapsedEl.textContent = (h ? h + '시간 ' : '') + (m ? m + '분 ' : '') + s + '초';
-    if (draw) renderDraw(draw);
+    if (draw) renderDraw(draw, bonus);
   };
 
-  const onWin = (tries, draw) => {
+  /* 등수별 평균 상금: 1등은 캐시된 이력 평균, 나머지는 한국 로또 통상치/법정금액 */
+  function avgPrizes() {
+    const firstAmts = history.map(r => r.firstPrize).filter(p => p > 0);
+    const first = firstAmts.length
+      ? Math.round(firstAmts.reduce((a,b)=>a+b,0) / firstAmts.length)
+      : 2_000_000_000;
+    return {
+      1: first,
+      2: 50_000_000,   // 5천만 통상
+      3: 1_500_000,    // 150만 통상
+      4: 50_000,       // 법정 고정
+      5: 5_000         // 법정 고정
+    };
+  }
+
+  function renderRankTable(tries, ranks) {
+    const prizes = avgPrizes();
+    const usingHistory = history.length > 0;
+    const labels = {
+      1: ['1등', '6개 일치'],
+      2: ['2등', '5개 + 보너스'],
+      3: ['3등', '5개 일치'],
+      4: ['4등', '4개 일치'],
+      5: ['5등', '3개 일치']
+    };
+    let totalWin = 0;
+    let totalHits = 0;
+    const rows = [1,2,3,4,5].map(k => {
+      const cnt = ranks[k] || 0;
+      const unit = prizes[k];
+      const sum = cnt * unit;
+      totalWin += sum;
+      totalHits += cnt;
+      const cls = 'r' + k + (cnt === 0 ? ' miss' : '');
+      return `
+        <tr class="${cls}">
+          <td class="rank-name">${labels[k][0]}</td>
+          <td>${labels[k][1]}</td>
+          <td>${fmtNum(cnt)} 회</td>
+          <td class="amt">${fmtKRW(unit)}</td>
+          <td class="amt">${cnt ? fmtKRW(sum) : '-'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const missCnt = tries - totalHits;
+    const missRow = `
+      <tr class="miss">
+        <td class="rank-name">꽝</td>
+        <td>0~2개</td>
+        <td>${fmtNum(missCnt)} 회</td>
+        <td class="amt">0 원</td>
+        <td class="amt">-</td>
+      </tr>
+    `;
+
+    $('#rRanks').innerHTML = `
+      <table class="rank-table">
+        <thead>
+          <tr><th>순위</th><th>일치</th><th>당첨 회수</th><th>평균 상금</th><th>합계</th></tr>
+        </thead>
+        <tbody>${rows}${missRow}</tbody>
+      </table>
+      <div class="hint" style="margin-top:8px">
+        ${usingHistory
+          ? `1등은 캐시된 ${history.length}회 평균값을 사용했습니다.`
+          : `이력 캐시가 없어 1등은 통상치(20억)를 사용했습니다. 상단에서 이력을 불러오면 더 정확해집니다.`}
+        2~3등은 통상 평균, 4~5등은 법정 고정 금액입니다.
+      </div>
+    `;
+    return totalWin;
+  }
+
+  const onWin = (tries, draw, bonus, ranks) => {
     setRunningUI(false);
     if (uiTimer) { clearInterval(uiTimer); uiTimer = null; }
-    renderDraw(draw);
+    renderDraw(draw, bonus);
     roundEl.textContent = fmtNum(tries);
     spentEl.textContent = fmtKRW(tries * 1000);
 
@@ -537,6 +668,13 @@
     rTries.textContent = fmtNum(tries) + ' 회';
     rSpent.textContent = fmtKRW(spentWon) + ' (' + fmtNum(spentWon) + '원)';
     rYears.textContent = yearsAt5PerWeek.toFixed(1) + ' 년';
+
+    const totalWin = renderRankTable(tries, ranks || []);
+    const net = totalWin - spentWon;
+    $('#rWinnings').textContent = fmtKRW(totalWin);
+    const netEl = $('#rNet');
+    netEl.textContent = (net >= 0 ? '+' : '−') + fmtKRW(Math.abs(net));
+    netEl.style.color = net >= 0 ? '#4ade80' : '#fca5a5';
 
     resultSub.textContent = '드디어 입력하신 번호가 1등에 당첨됐습니다!';
     resultCard.classList.add('show');
@@ -576,11 +714,11 @@
     worker = new Worker(URL.createObjectURL(blob));
 
     worker.onmessage = (e) => {
-      const { type, tries, draw } = e.data;
+      const { type, tries, draw, bonus, ranks } = e.data;
       if (type === 'progress') {
-        updateLive(tries, draw);
+        updateLive(tries, draw, bonus);
       } else if (type === 'win') {
-        onWin(tries, draw);
+        onWin(tries, draw, bonus, ranks);
         worker.terminate();
         worker = null;
       } else if (type === 'stopped') {
@@ -678,24 +816,40 @@
 
   async function fetchRange(from, to) {
     const total = to - from + 1;
-    const known = new Map(history.map(r => [r.drwNo, r]));
-    const fresh = [];
-    let done = 0, ok = 0, fail = 0;
-    for (let n = from; n <= to; n++) {
-      if (known.has(n)) {
-        done++; ok++;
-        setStatus(`진행 ${done}/${total} · 캐시 사용 ${ok}회 · 실패 ${fail}회`, 'ok');
-        continue;
-      }
-      const r = await fetchRound(n);
-      done++;
-      if (r) { fresh.push(r); ok++; }
-      else fail++;
-      setStatus(`회차 ${n} 조회 중... ${done}/${total} (성공 ${ok} · 실패 ${fail})`);
-      await new Promise(res => setTimeout(res, 60));
+    const known = new Set(history.map(r => r.drwNo));
+    const todo = [];
+    for (let n = from; n <= to; n++) if (!known.has(n)) todo.push(n);
+    const cached = total - todo.length;
+
+    if (todo.length === 0) {
+      setStatus(`모두 캐시에 있습니다 (${cached}회).`, 'ok');
+      return { ok: cached, fail: 0 };
     }
+
+    const CONCURRENCY = 15;
+    const fresh = [];
+    let done = 0, fail = 0, cursor = 0;
+    const t0 = performance.now();
+
+    async function worker() {
+      while (cursor < todo.length) {
+        const n = todo[cursor++];
+        const r = await fetchRound(n);
+        done++;
+        if (r) fresh.push(r); else fail++;
+        if (done % 5 === 0 || done === todo.length) {
+          const elapsed = (performance.now() - t0) / 1000;
+          const rate = done / Math.max(elapsed, 0.001);
+          const eta = Math.ceil((todo.length - done) / Math.max(rate, 0.001));
+          setStatus(`조회 중 ${done}/${todo.length} · 캐시 ${cached}회 · 신규 ${fresh.length}회 · 실패 ${fail}회 · 잔여 ~${eta}초`);
+        }
+      }
+    }
+
+    const pool = Array.from({ length: Math.min(CONCURRENCY, todo.length) }, worker);
+    await Promise.all(pool);
     if (fresh.length) mergeHistory(fresh);
-    return { ok, fail };
+    return { ok: cached + fresh.length, fail };
   }
 
   $('#hLatestBtn').addEventListener('click', async () => {
