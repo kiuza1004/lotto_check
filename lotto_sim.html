@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>로또 1등 당첨 확률 시뮬레이터</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card-2: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #facc15;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --shadow: 0 20px 50px rgba(0,0,0,.45);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: radial-gradient(1200px 600px at 20% -10%, #1e3a8a33, transparent),
+                radial-gradient(1000px 500px at 110% 10%, #be185d33, transparent),
+                var(--bg);
+    color: var(--text);
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Apple SD Gothic Neo', sans-serif;
+    min-height: 100vh;
+  }
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 30px;
+  }
+  header h1 {
+    font-size: clamp(24px, 4vw, 36px);
+    margin: 0 0 8px;
+    letter-spacing: -0.5px;
+  }
+  header p {
+    color: var(--muted);
+    margin: 0;
+    font-size: 15px;
+  }
+
+  .card {
+    background: linear-gradient(180deg, var(--card), #0b1224);
+    border: 1px solid #1f2a44;
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+
+  .label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+
+  .balls {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+  }
+
+  .ball-input {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 3px solid #475569;
+    background: #0b1224;
+    color: var(--text);
+    text-align: center;
+    font-size: 26px;
+    font-weight: 800;
+    outline: none;
+    transition: transform .15s ease, border-color .2s ease, background .25s ease, color .25s ease;
+    appearance: textfield;
+    -moz-appearance: textfield;
+    box-shadow: inset 0 -8px 16px rgba(0,0,0,.35), 0 6px 14px rgba(0,0,0,.4);
+  }
+  .ball-input::-webkit-outer-spin-button,
+  .ball-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .ball-input:focus {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(56,189,248,.15), 0 6px 14px rgba(0,0,0,.5);
+  }
+  .ball-input.color-yellow { background: radial-gradient(circle at 30% 30%, #fff4a1, #f5c518); color: #4a3a00; border-color: #d4a017; }
+  .ball-input.color-blue   { background: radial-gradient(circle at 30% 30%, #93c5fd, #2563eb); color: #fff;   border-color: #1d4ed8; }
+  .ball-input.color-red    { background: radial-gradient(circle at 30% 30%, #fca5a5, #dc2626); color: #fff;   border-color: #991b1b; }
+  .ball-input.color-gray   { background: radial-gradient(circle at 30% 30%, #cbd5e1, #475569); color: #fff;   border-color: #334155; }
+  .ball-input.color-green  { background: radial-gradient(circle at 30% 30%, #bbf7d0, #16a34a); color: #052e16; border-color: #15803d; }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    transition: transform .12s ease, opacity .2s ease, box-shadow .2s ease;
+  }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary {
+    background: linear-gradient(180deg, #38bdf8, #0284c7);
+    color: #001722;
+    box-shadow: 0 8px 20px rgba(2,132,199,.35);
+  }
+  .btn-stop {
+    background: linear-gradient(180deg, #f87171, #b91c1c);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(185,28,28,.35);
+  }
+  .btn-ghost {
+    background: #0b1224;
+    color: var(--text);
+    border: 1px solid #334155;
+  }
+
+  .live {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-top: 6px;
+  }
+  .stat {
+    background: #0b1224;
+    border: 1px solid #1f2a44;
+    border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .stat .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .stat .v { font-size: 22px; font-weight: 800; margin-top: 6px; word-break: break-all; }
+  .stat .v.accent { color: var(--accent-2); }
+  .stat .v.success { color: var(--success); }
+
+  .draw {
+    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 18px; min-height: 56px;
+  }
+  .draw .b {
+    width: 46px; height: 46px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 18px;
+    box-shadow: inset 0 -6px 10px rgba(0,0,0,.3);
+  }
+
+  .result-card {
+    display: none;
+    text-align: center;
+    border: 1px solid #15803d;
+    background: linear-gradient(180deg, #052e16, #022c1a);
+  }
+  .result-card.show { display: block; animation: pop .4s ease; }
+  @keyframes pop {
+    from { transform: scale(.92); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  .result-card h2 {
+    color: #4ade80; margin: 0 0 6px; font-size: 28px;
+  }
+  .result-card .sub { color: #bbf7d0; margin-bottom: 18px; }
+
+  footer {
+    text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🎱 로또 1등 당첨 확률 시뮬레이터</h1>
+      <p>1~45 사이 숫자 6개를 입력하고 1등이 나올 때까지 가상 추첨을 돌려보세요.</p>
+    </header>
+
+    <section class="card">
+      <div class="label">내 번호 입력 (1~45)</div>
+      <div class="balls" id="balls">
+        <input class="ball-input" type="number" min="1" max="45" maxlength="2" />
+        <input class="ball-input" type="number" min="1" max="45" maxlength="2" />
+        <input class="ball-input" type="number" min="1" max="45" maxlength="2" />
+        <input class="ball-input" type="number" min="1" max="45" maxlength="2" />
+        <input class="ball-input" type="number" min="1" max="45" maxlength="2" />
+        <input class="ball-input" type="number" min="1" max="45" maxlength="2" />
+      </div>
+      <div class="controls">
+        <button class="btn-ghost" id="randomBtn">🎲 자동 채우기</button>
+        <button class="btn-primary" id="startBtn">▶ 시뮬레이션 시작</button>
+        <button class="btn-stop" id="stopBtn" disabled>■ 중단</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="label">실시간 진행 상황</div>
+      <div class="live">
+        <div class="stat"><div class="k">현재 회차</div><div class="v" id="round">0</div></div>
+        <div class="stat"><div class="k">초당 추첨 속도</div><div class="v" id="speed">0</div></div>
+        <div class="stat"><div class="k">누적 지출</div><div class="v" id="spent">0 원</div></div>
+        <div class="stat"><div class="k">경과 시간</div><div class="v" id="elapsed">0초</div></div>
+      </div>
+      <div class="label" style="margin-top:18px;">최근 추첨 번호</div>
+      <div class="draw" id="draw"></div>
+    </section>
+
+    <section class="card result-card" id="resultCard">
+      <h2>🎉 1등 당첨!</h2>
+      <div class="sub" id="resultSub"></div>
+      <div class="live">
+        <div class="stat"><div class="k">총 시도 회차</div><div class="v accent" id="rTries">-</div></div>
+        <div class="stat"><div class="k">지출 금액</div><div class="v success" id="rSpent">-</div></div>
+        <div class="stat"><div class="k">매주 5게임 기준 예상 연수</div><div class="v accent" id="rYears">-</div></div>
+      </div>
+    </section>
+
+    <footer>※ 본 시뮬레이션은 통계적 확률(약 1/8,145,060)을 체험하기 위한 도구입니다.</footer>
+  </div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => document.querySelectorAll(s);
+  const inputs = $$('.ball-input');
+  const startBtn = $('#startBtn');
+  const stopBtn = $('#stopBtn');
+  const randomBtn = $('#randomBtn');
+  const roundEl = $('#round');
+  const speedEl = $('#speed');
+  const spentEl = $('#spent');
+  const elapsedEl = $('#elapsed');
+  const drawEl = $('#draw');
+  const resultCard = $('#resultCard');
+  const resultSub = $('#resultSub');
+  const rTries = $('#rTries');
+  const rSpent = $('#rSpent');
+  const rYears = $('#rYears');
+
+  const colorClass = (n) => {
+    if (n >= 1 && n <= 10) return 'color-yellow';
+    if (n >= 11 && n <= 20) return 'color-blue';
+    if (n >= 21 && n <= 30) return 'color-red';
+    if (n >= 31 && n <= 40) return 'color-gray';
+    if (n >= 41 && n <= 45) return 'color-green';
+    return '';
+  };
+
+  const applyColor = (el, n) => {
+    el.classList.remove('color-yellow','color-blue','color-red','color-gray','color-green');
+    const c = colorClass(n);
+    if (c) el.classList.add(c);
+  };
+
+  inputs.forEach(inp => {
+    inp.addEventListener('input', () => {
+      let v = inp.value.replace(/[^0-9]/g, '');
+      if (v.length > 2) v = v.slice(0,2);
+      inp.value = v;
+      const n = parseInt(v, 10);
+      applyColor(inp, isNaN(n) ? 0 : n);
+    });
+  });
+
+  randomBtn.addEventListener('click', () => {
+    const pool = Array.from({length:45}, (_,i)=>i+1);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const picks = pool.slice(0, 6).sort((a,b)=>a-b);
+    inputs.forEach((inp, i) => {
+      inp.value = picks[i];
+      applyColor(inp, picks[i]);
+    });
+  });
+
+  const fmtKRW = (won) => {
+    if (won >= 1e8) return (won / 1e8).toFixed(2) + ' 억원';
+    if (won >= 1e4) return (won / 1e4).toFixed(2) + ' 만원';
+    return won.toLocaleString() + ' 원';
+  };
+  const fmtNum = (n) => n.toLocaleString();
+  const renderDraw = (arr) => {
+    drawEl.innerHTML = '';
+    arr.forEach(n => {
+      const d = document.createElement('div');
+      d.className = 'b ' + colorClass(n);
+      d.textContent = n;
+      drawEl.appendChild(d);
+    });
+  };
+
+  /* ===== Web Worker (Blob inline) ===== */
+  const workerSrc = `
+    let running = false;
+    let target = [];
+    let targetMask = 0n;
+    let tries = 0;
+    let lastReport = 0;
+    const REPORT_EVERY = 50000;
+
+    function pickSixMask() {
+      let mask = 0n;
+      let count = 0;
+      while (count < 6) {
+        const n = (Math.random() * 45) | 0;
+        const bit = 1n << BigInt(n);
+        if ((mask & bit) === 0n) {
+          mask |= bit;
+          count++;
+        }
+      }
+      return mask;
+    }
+
+    function maskToArr(mask) {
+      const arr = [];
+      for (let i = 0; i < 45; i++) {
+        if ((mask >> BigInt(i)) & 1n) arr.push(i + 1);
+      }
+      return arr;
+    }
+
+    function loop() {
+      if (!running) return;
+      const batch = 200000;
+      for (let i = 0; i < batch; i++) {
+        tries++;
+        const m = pickSixMask();
+        if (m === targetMask) {
+          postMessage({ type: 'win', tries, draw: maskToArr(m) });
+          running = false;
+          return;
+        }
+        if (tries - lastReport >= REPORT_EVERY) {
+          lastReport = tries;
+          postMessage({ type: 'progress', tries, draw: maskToArr(m) });
+        }
+      }
+      setTimeout(loop, 0);
+    }
+
+    onmessage = (e) => {
+      const { cmd, payload } = e.data;
+      if (cmd === 'start') {
+        target = payload.numbers;
+        targetMask = 0n;
+        for (const n of target) targetMask |= 1n << BigInt(n - 1);
+        tries = 0;
+        lastReport = 0;
+        running = true;
+        loop();
+      } else if (cmd === 'stop') {
+        running = false;
+        postMessage({ type: 'stopped', tries });
+      }
+    };
+  `;
+
+  let worker = null;
+  let startTime = 0;
+  let lastTickTime = 0;
+  let lastTickTries = 0;
+  let uiTimer = null;
+
+  const setRunningUI = (isRunning) => {
+    startBtn.disabled = isRunning;
+    stopBtn.disabled = !isRunning;
+    randomBtn.disabled = isRunning;
+    inputs.forEach(i => i.disabled = isRunning);
+  };
+
+  const updateLive = (tries, draw) => {
+    roundEl.textContent = fmtNum(tries);
+    spentEl.textContent = fmtKRW(tries * 1000);
+    const now = performance.now();
+    const dt = (now - lastTickTime) / 1000;
+    if (dt > 0.2) {
+      const sp = Math.round((tries - lastTickTries) / dt);
+      speedEl.textContent = fmtNum(sp) + ' /초';
+      lastTickTime = now;
+      lastTickTries = tries;
+    }
+    const sec = Math.floor((now - startTime) / 1000);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    elapsedEl.textContent = (h ? h + '시간 ' : '') + (m ? m + '분 ' : '') + s + '초';
+    if (draw) renderDraw(draw);
+  };
+
+  const onWin = (tries, draw) => {
+    setRunningUI(false);
+    if (uiTimer) { clearInterval(uiTimer); uiTimer = null; }
+    renderDraw(draw);
+    roundEl.textContent = fmtNum(tries);
+    spentEl.textContent = fmtKRW(tries * 1000);
+
+    const spentWon = tries * 1000;
+    const yearsAt5PerWeek = tries / (5 * 52);
+
+    rTries.textContent = fmtNum(tries) + ' 회';
+    rSpent.textContent = fmtKRW(spentWon) + ' (' + fmtNum(spentWon) + '원)';
+    rYears.textContent = yearsAt5PerWeek.toFixed(1) + ' 년';
+
+    resultSub.textContent = '드디어 입력하신 번호가 1등에 당첨됐습니다!';
+    resultCard.classList.add('show');
+  };
+
+  const validateNumbers = () => {
+    const vals = [];
+    for (const inp of inputs) {
+      const n = parseInt(inp.value, 10);
+      if (isNaN(n) || n < 1 || n > 45) {
+        alert('1부터 45 사이의 숫자를 모두 입력해주세요.');
+        return null;
+      }
+      vals.push(n);
+    }
+    const unique = new Set(vals);
+    if (unique.size !== 6) {
+      alert('중복된 번호가 있습니다. 서로 다른 6개의 숫자를 입력해주세요.');
+      return null;
+    }
+    return vals;
+  };
+
+  startBtn.addEventListener('click', () => {
+    const numbers = validateNumbers();
+    if (!numbers) return;
+
+    resultCard.classList.remove('show');
+    roundEl.textContent = '0';
+    spentEl.textContent = '0 원';
+    speedEl.textContent = '0 /초';
+    elapsedEl.textContent = '0초';
+    drawEl.innerHTML = '';
+
+    if (worker) worker.terminate();
+    const blob = new Blob([workerSrc], { type: 'application/javascript' });
+    worker = new Worker(URL.createObjectURL(blob));
+
+    worker.onmessage = (e) => {
+      const { type, tries, draw } = e.data;
+      if (type === 'progress') {
+        updateLive(tries, draw);
+      } else if (type === 'win') {
+        onWin(tries, draw);
+        worker.terminate();
+        worker = null;
+      } else if (type === 'stopped') {
+        updateLive(tries, null);
+      }
+    };
+
+    startTime = performance.now();
+    lastTickTime = startTime;
+    lastTickTries = 0;
+    setRunningUI(true);
+    worker.postMessage({ cmd: 'start', payload: { numbers } });
+  });
+
+  stopBtn.addEventListener('click', () => {
+    if (worker) {
+      worker.postMessage({ cmd: 'stop' });
+      worker.terminate();
+      worker = null;
+    }
+    setRunningUI(false);
+  });
+</script>
+</body>
+</html>
