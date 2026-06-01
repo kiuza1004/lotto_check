@@ -366,7 +366,7 @@
       </div>
     </section>
 
-    <footer>※ 본 시뮬레이션은 통계적 확률(약 1/8,145,060)을 체험하기 위한 도구입니다. <span style="opacity:.5">build 2026-06-01-v4</span></footer>
+    <footer>※ 본 시뮬레이션은 통계적 확률(약 1/8,145,060)을 체험하기 위한 도구입니다. <span style="opacity:.5">build 2026-06-01-v5</span></footer>
   </div>
 
 <script>
@@ -585,19 +585,26 @@
     if (draw) renderDraw(draw, bonus);
   };
 
-  /* 등수별 평균 상금: 1등은 캐시된 이력 평균, 나머지는 한국 로또 통상치/법정금액 */
+  /* 등수별 평균 상금: divisions가 있는 회차는 실측 평균, 없으면 통상치/법정금액 */
   function avgPrizes() {
-    const firstAmts = history.map(r => r.firstPrize).filter(p => p > 0);
-    const first = firstAmts.length
-      ? Math.round(firstAmts.reduce((a,b)=>a+b,0) / firstAmts.length)
-      : 2_000_000_000;
-    return {
-      1: first,
-      2: 50_000_000,   // 5천만 통상
-      3: 1_500_000,    // 150만 통상
-      4: 50_000,       // 법정 고정
-      5: 5_000         // 법정 고정
-    };
+    const defaults = { 1: 2_000_000_000, 2: 50_000_000, 3: 1_500_000, 4: 50_000, 5: 5_000 };
+    const sums = [0, 0, 0, 0, 0, 0];
+    const counts = [0, 0, 0, 0, 0, 0];
+    history.forEach(r => {
+      if (Array.isArray(r.divisions) && r.divisions.length >= 5) {
+        for (let i = 0; i < 5; i++) {
+          const p = r.divisions[i]?.prize || 0;
+          if (p > 0) { sums[i+1] += p; counts[i+1]++; }
+        }
+      } else if (r.firstPrize > 0) {
+        sums[1] += r.firstPrize; counts[1]++;
+      }
+    });
+    const out = {};
+    for (let i = 1; i <= 5; i++) {
+      out[i] = counts[i] ? Math.round(sums[i] / counts[i]) : defaults[i];
+    }
+    return out;
   }
 
   function renderRankTable(tries, ranks) {
@@ -650,9 +657,8 @@
       </table>
       <div class="hint" style="margin-top:8px">
         ${usingHistory
-          ? `1등은 캐시된 ${history.length}회 평균값을 사용했습니다.`
-          : `이력 캐시가 없어 1등은 통상치(20억)를 사용했습니다. 상단에서 이력을 불러오면 더 정확해집니다.`}
-        2~3등은 통상 평균, 4~5등은 법정 고정 금액입니다.
+          ? `캐시된 ${history.length}회의 실제 등수별 상금 평균을 사용했습니다.`
+          : `이력 캐시가 없어 통상치/법정 고정금액을 사용했습니다. 상단에서 이력을 불러오면 정확해집니다.`}
       </div>
     `;
     return totalWin;
@@ -747,6 +753,9 @@
 
   /* ================== 실제 당첨 이력 ================== */
   const HISTORY_KEY = 'lotto_history_v1';
+  /* 1순위: smok95/lotto (raw.githubusercontent.com, CORS 허용, 1~5등 실상금 포함) */
+  const SMOK_URL = (drwNo) => `https://raw.githubusercontent.com/smok95/lotto/main/results/${drwNo}.json`;
+  /* 폴백: dhlottery 공식 API → 외부 CORS 프록시 */
   const API = (drwNo) => 'https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=' + drwNo;
   const PROXIES = [
     { name: 'codetabs',      build: u => 'https://api.codetabs.com/v1/proxy/?quest=' + u },
@@ -757,6 +766,7 @@
   ];
   let activeProxyIdx = 0;
   let lastFetchError = '';
+  let lastSource = '';   // 최근 성공한 데이터 출처 이름
   const proxyErrors = {}; // name -> last error string
 
   const hFrom = $('#hFrom');
@@ -806,6 +816,36 @@
   }
 
   async function fetchRound(drwNo) {
+    /* 1순위: smok95 GitHub 미러 */
+    try {
+      const res = await fetchWithTimeout(SMOK_URL(drwNo), 8000);
+      if (res.ok) {
+        const d = await res.json();
+        if (d && Array.isArray(d.numbers) && d.numbers.length === 6) {
+          delete proxyErrors['smok95'];
+          lastSource = 'smok95 (GitHub)';
+          return {
+            drwNo: d.draw_no,
+            date: (d.date || '').slice(0, 10),
+            numbers: d.numbers.slice().sort((a,b) => a-b),
+            bonus: d.bonus_no,
+            firstPrize: d.divisions?.[0]?.prize || 0,
+            firstWinners: d.divisions?.[0]?.winners || 0,
+            totalSales: d.total_sales_amount || 0,
+            divisions: d.divisions || null
+          };
+        }
+        proxyErrors['smok95'] = '데이터 형식 불일치';
+      } else if (res.status === 404) {
+        proxyErrors['smok95'] = '아직 업로드 안 됨 (404)';
+      } else {
+        proxyErrors['smok95'] = `HTTP ${res.status}`;
+      }
+    } catch (e) {
+      proxyErrors['smok95'] = e.name === 'AbortError' ? 'timeout' : (e.message || 'error');
+    }
+
+    /* 2순위 폴백: dhlottery 원본 → 외부 CORS 프록시 */
     const apiUrl = API(drwNo);
     const order = [activeProxyIdx, ...PROXIES.map((_, i) => i).filter(i => i !== activeProxyIdx)];
     for (const i of order) {
@@ -823,6 +863,7 @@
         const data = JSON.parse(text);
         if (data.returnValue !== 'success') { recordErr(`returnValue=${data.returnValue}`); continue; }
         activeProxyIdx = i;
+        lastSource = `dhlottery via ${p.name}`;
         delete proxyErrors[p.name];
         return {
           drwNo: data.drwNo,
@@ -951,7 +992,7 @@
     }
   });
 
-  /* 우리 포맷 또는 dhlottery 원본 포맷을 모두 수용 */
+  /* 내부 포맷 / smok95 포맷 / dhlottery 원본 포맷을 모두 수용 */
   function normalizeRow(r) {
     if (!r || typeof r !== 'object') return null;
     if (Array.isArray(r.numbers) && r.numbers.length === 6 && typeof r.drwNo === 'number') {
@@ -962,7 +1003,20 @@
         bonus: r.bonus,
         firstPrize: r.firstPrize || 0,
         firstWinners: r.firstWinners || 0,
-        totalSales: r.totalSales || 0
+        totalSales: r.totalSales || 0,
+        divisions: r.divisions || null
+      };
+    }
+    if (typeof r.draw_no === 'number' && Array.isArray(r.numbers)) {
+      return {
+        drwNo: r.draw_no,
+        date: (r.date || '').slice(0, 10),
+        numbers: r.numbers.slice().sort((a,b)=>a-b),
+        bonus: r.bonus_no,
+        firstPrize: r.divisions?.[0]?.prize || 0,
+        firstWinners: r.divisions?.[0]?.winners || 0,
+        totalSales: r.total_sales_amount || 0,
+        divisions: r.divisions || null
       };
     }
     if (typeof r.drwtNo1 === 'number') {
@@ -973,7 +1027,8 @@
         bonus: r.bnusNo,
         firstPrize: r.firstWinamnt || 0,
         firstWinners: r.firstPrzwnerCo || 0,
-        totalSales: r.totSellamnt || 0
+        totalSales: r.totSellamnt || 0,
+        divisions: null
       };
     }
     return null;
@@ -999,18 +1054,18 @@
     busy = true;
     $('#hFetchBtn').disabled = true;
 
-    setStatus('프록시 연결 확인 중... (최대 5개 폴백 시도)');
+    setStatus('데이터 출처 확인 중... (smok95 미러 → dhlottery 프록시 폴백)');
     const test = await fetchRound(to);
     if (!test) {
       hStatus.className = 'hint err';
-      hStatus.innerHTML = `모든 프록시 실패. 프록시별 마지막 오류:${allProxyErrorsHtml()}
-        <div style="margin-top:8px;opacity:.85">다른 네트워크/VPN을 시도하거나 1~2분 후 다시 시도하세요.</div>`;
+      hStatus.innerHTML = `모든 출처 실패. 출처별 마지막 오류:${allProxyErrorsHtml()}
+        <div style="margin-top:8px;opacity:.85">아직 업로드되지 않은 최신 회차이거나 네트워크 문제일 수 있습니다. 회차를 낮춰 다시 시도하거나 "📂 가져오기"로 JSON을 직접 불러올 수 있습니다.</div>`;
       busy = false;
       $('#hFetchBtn').disabled = false;
       return;
     }
     mergeHistory([test]);
-    setStatus(`✓ 프록시 [${PROXIES[activeProxyIdx].name}] 연결됨. 조회 시작...`, 'ok');
+    setStatus(`✓ 출처 [${lastSource}] 연결됨. 조회 시작...`, 'ok');
 
     const { ok, fail } = await fetchRange(from, to);
     busy = false;
@@ -1020,7 +1075,7 @@
       return;
     }
     const tail = fail ? ` (마지막 오류: ${lastFetchError})` : '';
-    setStatus(`✓ 완료 — 성공 ${ok}회 · 실패 ${fail}회 · 프록시 [${PROXIES[activeProxyIdx].name}]${tail}`, 'ok');
+    setStatus(`✓ 완료 — 성공 ${ok}회 · 실패 ${fail}회 · 출처 [${lastSource}]${tail}`, 'ok');
     renderHistoryUI();
   });
 
