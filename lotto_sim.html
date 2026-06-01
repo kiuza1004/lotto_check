@@ -363,7 +363,7 @@
       </div>
     </section>
 
-    <footer>※ 본 시뮬레이션은 통계적 확률(약 1/8,145,060)을 체험하기 위한 도구입니다.</footer>
+    <footer>※ 본 시뮬레이션은 통계적 확률(약 1/8,145,060)을 체험하기 위한 도구입니다. <span style="opacity:.5">build 2026-06-01-v3</span></footer>
   </div>
 
 <script>
@@ -754,6 +754,7 @@
   ];
   let activeProxyIdx = 0;
   let lastFetchError = '';
+  const proxyErrors = {}; // name -> last error string
 
   const hFrom = $('#hFrom');
   const hTo = $('#hTo');
@@ -806,18 +807,20 @@
     const order = [activeProxyIdx, ...PROXIES.map((_, i) => i).filter(i => i !== activeProxyIdx)];
     for (const i of order) {
       const p = PROXIES[i];
+      const recordErr = (msg) => { lastFetchError = `${p.name}: ${msg}`; proxyErrors[p.name] = msg; };
       try {
         const res = await fetchWithTimeout(p.build(apiUrl), 9000);
-        if (!res.ok) { lastFetchError = `${p.name}: HTTP ${res.status}`; continue; }
+        if (!res.ok) { recordErr(`HTTP ${res.status}`); continue; }
         const text = (await res.text()).trim();
         if (!text || text[0] !== '{') {
           const snippet = text.replace(/\s+/g, ' ').slice(0, 80);
-          lastFetchError = `${p.name}: 비JSON 응답 — ${snippet || '(빈 응답)'}`;
+          recordErr(`비JSON — ${snippet || '(빈 응답)'}`);
           continue;
         }
         const data = JSON.parse(text);
-        if (data.returnValue !== 'success') { lastFetchError = `${p.name}: returnValue=${data.returnValue}`; continue; }
+        if (data.returnValue !== 'success') { recordErr(`returnValue=${data.returnValue}`); continue; }
         activeProxyIdx = i;
+        delete proxyErrors[p.name];
         return {
           drwNo: data.drwNo,
           date: data.drwNoDate,
@@ -828,10 +831,17 @@
           totalSales: data.totSellamnt || 0
         };
       } catch (e) {
-        lastFetchError = `${p.name}: ${e.name === 'AbortError' ? 'timeout' : (e.message || 'error')}`;
+        recordErr(e.name === 'AbortError' ? 'timeout' : (e.message || 'error'));
       }
     }
     return null;
+  }
+
+  function allProxyErrorsHtml() {
+    const items = Object.entries(proxyErrors).map(([n, e]) =>
+      `<li><strong>${n}</strong>: <span style="opacity:.85">${e}</span></li>`
+    ).join('');
+    return items ? `<ul style="margin:6px 0 0 18px;padding:0;font-size:12px">${items}</ul>` : '';
   }
 
   async function probeLatest() {
@@ -921,10 +931,12 @@
     busy = true;
     $('#hFetchBtn').disabled = true;
 
-    setStatus('프록시 연결 확인 중...');
+    setStatus('프록시 연결 확인 중... (최대 5개 폴백 시도)');
     const test = await fetchRound(to);
     if (!test) {
-      setStatus(`프록시 연결 실패: ${lastFetchError || '알 수 없는 오류'}. 잠시 후 다시 시도하거나 다른 네트워크를 사용해보세요.`, 'err');
+      hStatus.className = 'hint err';
+      hStatus.innerHTML = `모든 프록시 실패. 프록시별 마지막 오류:${allProxyErrorsHtml()}
+        <div style="margin-top:8px;opacity:.85">다른 네트워크/VPN을 시도하거나 1~2분 후 다시 시도하세요.</div>`;
       busy = false;
       $('#hFetchBtn').disabled = false;
       return;
