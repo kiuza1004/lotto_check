@@ -746,9 +746,10 @@
   const HISTORY_KEY = 'lotto_history_v1';
   const API = (drwNo) => 'https://www.dhlottery.co.kr/common.do?method=getLottoNumber&drwNo=' + drwNo;
   const PROXIES = [
-    { name: 'corsproxy.io',  build: u => 'https://corsproxy.io/?url=' + encodeURIComponent(u) },
     { name: 'codetabs',      build: u => 'https://api.codetabs.com/v1/proxy/?quest=' + u },
+    { name: 'corsproxy.io',  build: u => 'https://corsproxy.io/?' + encodeURIComponent(u) },
     { name: 'allorigins',    build: u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u) },
+    { name: 'cors.lol',      build: u => 'https://api.cors.lol/?url=' + encodeURIComponent(u) },
     { name: 'thingproxy',    build: u => 'https://thingproxy.freeboard.io/fetch/' + u }
   ];
   let activeProxyIdx = 0;
@@ -809,7 +810,11 @@
         const res = await fetchWithTimeout(p.build(apiUrl), 9000);
         if (!res.ok) { lastFetchError = `${p.name}: HTTP ${res.status}`; continue; }
         const text = (await res.text()).trim();
-        if (!text || text[0] !== '{') { lastFetchError = `${p.name}: 비JSON 응답`; continue; }
+        if (!text || text[0] !== '{') {
+          const snippet = text.replace(/\s+/g, ' ').slice(0, 80);
+          lastFetchError = `${p.name}: 비JSON 응답 — ${snippet || '(빈 응답)'}`;
+          continue;
+        }
         const data = JSON.parse(text);
         if (data.returnValue !== 'success') { lastFetchError = `${p.name}: returnValue=${data.returnValue}`; continue; }
         activeProxyIdx = i;
